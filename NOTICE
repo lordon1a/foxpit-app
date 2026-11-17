@@ -13,3 +13,6 @@ coder/websocket (https://github.com/coder/websocket), ISC License.
 go-pty (https://github.com/aymanbagabas/go-pty), MIT License.
 golang.org/x/sys, BSD 3-Clause License.
 xterm.js (https://github.com/xtermjs/xterm.js), MIT License: frontend/vendor/xterm.
+Inter (https://rsms.me/inter/), SIL Open Font License 1.1: frontend/vendor/inter.
+T3 Code (https://github.com/pingdotgg/t3code), MIT License: the reading style of replies
+(type, sizes, the fade of a new block while a reply streams) and the model picker's layout follow it.

@@ -135,7 +135,7 @@ func main() {
 			Handler:    application.AssetFileServerFS(assets),
 			Middleware: withAPI,
 		},
-		OnShutdown: func() { stopWorkers(); stopBrowser(); magpie.Stop() },
+		OnShutdown: func() { stopWorkers(); stopACP(); stopBrowser(); magpie.Stop() },
 	})
 
 	quitApp = app.Quit

@@ -49,7 +49,7 @@
     s.append(u);
     return s;
   }
-  const MARK = { claude: "C", codex: "◎", oc: "O", gemini: "G", auto: "A" };
+  const MARK = { claude: "C", codex: "◎", oc: "O", gemini: "G", auto: "A", acp: "◇" };
   function pv(provider, size) { return h("span", "pv " + provider + (size ? " " + size : ""), MARK[provider] || "?"); }
   // bars fill from where they last were (or from empty), so a change of
   // account or chat reads as the meter moving, not as a redraw
@@ -73,6 +73,9 @@
   const modelOf = (accountId, modelId) => (acct(accountId)?.models || []).find((m) => m.id === modelId);
   const chat = () => D.chats.find((c) => c.id === state.chatId);
   const modelName = (accountId, modelId) => modelOf(accountId, modelId)?.name || modelId;
+  // another agent (OpenCode, Gemini CLI…) instead of Claude Code: its group id is "acp:<agent>"
+  const agentOf = (accountId) => (/^acp:/.test(accountId || "") ? accountId.slice(4) : "");
+  const engineName = (accountId) => (agentOf(accountId) ? acct(accountId).name : "Claude Code");
 
   // ---------- left rail ----------
   // The rail lists chats two ways: by project (each folder its own section)
@@ -251,14 +254,14 @@
     st.textContent = c.state === "running" ? "● running" : c.state === "done" ? "done" : "idle";
     $("#acctChip").replaceChildren(pv(a.provider, "sm"), a.name, icon("chev", "chev"));
     $("#modelChip").replaceChildren(modelName(c.account, c.model), h("span", "dim", "· " + c.effort), icon("chev", "chev"));
-    $("#modelChip2").replaceChildren(pv(a.provider, "sm"), modelName(c.account, c.model), icon("chev", "chev"));
+    $("#modelChip2").replaceChildren(pv(a.provider, "sm"), h("b", "", modelName(c.account, c.model)), noEffort(c) ? null : h("span", "eff", effortLabel(c.effort)), icon("chev", "chev"));
     $("#effortChip").replaceChildren(icon("bolt"), c.effort);
     const md = modeOf(c), mc = $("#modeChip");
     mc.replaceChildren(icon("shield"), md.name);
-    mc.className = "chip mode-" + md.id;
+    mc.className = "cm mode-" + md.id;
     mc.title = "Permissions: " + md.note;
     const wt = $("#wtChip");
-    wt.className = "chip chip-quiet wt";
+    wt.className = "cm wt";
     wt.title = D.projectPath || "";
     wt.replaceChildren(icon("folder"), D.projectPath ? D.project : "No folder");
     wt.parentElement.querySelector(".copy-chip")?.remove();
@@ -386,6 +389,16 @@
       const text = para.join("\n").replace(/\s+$/, "");
       para = [];
       if (!text.trim()) return;
+      // a paragraph opening on a line that is all bold ("**4 — The idea.**")
+      // reads as a small heading over its text
+      const lead = /^\s*(\*\*|__)([^*_\n]+)\1\s*:?\s*(\n|$)/.exec(text);
+      if (lead) {
+        box.append(h("div", "md-lead", ...inline(lead[2])));
+        const rest = text.slice(lead[0].length);
+        if (!rest.trim()) return;
+        para = [rest];
+        return flush();
+      }
       const pics = [], p = h("p", "", ...inline(text, pics));
       if (p.childNodes.length) box.append(p);
       for (const [src, alt, vid] of pics) {
@@ -447,6 +460,56 @@
     return box;
   }
   const base = (p) => String(p || "").replace(/^.*[\\/]/, "");
+  // A reply as it streams, the way T3 Code draws one: cut at blank lines
+  // outside code fences; finished blocks keep the nodes they were drawn with,
+  // only the last block is drawn again, and a block fades in once when it
+  // first appears. Markers the model has opened but not closed yet (**bold,
+  // `code) are closed for the drawing, so they never show as raw stars.
+  function mdBlocks(s) {
+    const lines = String(s || "").replace(/\r\n?/g, "\n").split("\n"), out = [];
+    let cur = [], fence = "";
+    for (const l of lines) {
+      const f = /^\s*(```+|~~~+)/.exec(l);
+      if (f) fence = fence ? (l.trim().startsWith(fence) ? "" : fence) : f[1];
+      if (!fence && !f && !l.trim()) { if (cur.length) out.push(cur.join("\n")); cur = []; continue; }
+      cur.push(l);
+    }
+    if (cur.length) out.push(cur.join("\n"));
+    return out;
+  }
+  function closeOpen(src) {
+    let s = src.replace(/(\*\*|__)\s*$/, "");
+    const plain = s.replace(/```[\s\S]*?(```|$)/g, "");
+    if ((plain.match(/`/g) || []).length % 2) s += "`";
+    const noCode = plain.replace(/`[^`]*`?/g, "");
+    if ((noCode.match(/\*\*/g) || []).length % 2) s += "**";
+    return s;
+  }
+  // drawn blocks by reply part, kept off the part itself (parts are saved)
+  const drawnBlocks = new WeakMap();
+  function textPart(p, m) {
+    if (!m || !m.running) { drawnBlocks.delete(p); return richText(p.text); }
+    if (!drawnBlocks.has(p)) drawnBlocks.set(p, []);
+    const blocks = mdBlocks(p.text), cache = drawnBlocks.get(p), box = h("div", "rich"), now = Date.now();
+    // moving a node restarts its animation: each frame sets where its fade is
+    const fade = (nodes, age) => {
+      for (const n of nodes) if (n.classList) {
+        n.classList.toggle("blk-in", age < 600);
+        n.style.animationDelay = age > 0 && age < 600 ? -age + "ms" : "";
+      }
+    };
+    blocks.forEach((src, i) => {
+      const last = i === blocks.length - 1, e = cache[i];
+      if (e && e.done && e.src === src) { fade(e.nodes, now - e.t0); box.append(...e.nodes); return; }
+      const t0 = e ? e.t0 : now;
+      const nodes = [...richText(last ? closeOpen(src) : src).childNodes];
+      fade(nodes, now - t0);
+      cache[i] = { src, nodes, t0, done: !last };
+      box.append(...nodes);
+    });
+    cache.length = blocks.length;
+    return box;
+  }
   function toolSummary(t) {
     const i = t.input || {};
     switch (t.name) {
@@ -1258,6 +1321,7 @@
   }
   async function readContext(c) {
     if (!c.session) return { error: "Send a message first: the context fills as the chat goes." };
+    if (agentOf(c.account)) return { error: "The breakdown is shown for Claude Code chats." };
     if (runs.has(c.id)) return { error: "Details come when this reply finishes." };
     if (ctxRuns.has(c.id)) return ctxRuns.get(c.id);
     const job = (async () => {
@@ -1285,7 +1349,7 @@
     try {
       const b = await fetch("/api/backend").then((r) => r.json());
       const ws = new WebSocket(b.url.replace(/^http/, "ws") + "/chat?key=" + encodeURIComponent(b.key));
-      ws.onopen = () => ws.send(JSON.stringify({ warm: true, prompt: "", model: c.model, effort: c.effort, session: c.session || "", cwd: runDir(c), mode: modeOf(c).id,
+      ws.onopen = () => ws.send(JSON.stringify({ warm: true, prompt: "", model: c.model, effort: c.effort, session: c.session || "", cwd: runDir(c), mode: modeOf(c).id, agent: agentOf(c.account),
         account: D.claudeUser || "", auto: D.autoSwitch !== false, allow: c.allow || [], at: "", chat: c.id, via: !!S().viaMagpie }));
       ws.onmessage = () => ws.close();
     } catch { warmed.delete(c.id); }
@@ -1742,7 +1806,13 @@
       if (!p.drawn && n && n.classList) { p.drawn = true; n.classList.add("ask-in"); }
       return n;
     }
-    return p.k === "tool" ? toolCard(p) : p.k === "hop" ? hopNode(p) : p.k === "think" ? thinkNode(p, m) : p.k === "said" ? saidNode(p) : richText(p.text);
+    return p.k === "tool" ? toolCard(p) : p.k === "hop" ? hopNode(p) : p.k === "think" ? thinkNode(p, m) : p.k === "said" ? saidNode(p) : textPart(p, m);
+  }
+  function liveStatus(m) {
+    const n = m.secs || 0, t = n < 60 ? n + "s" : Math.floor(n / 60) + "m " + String(n % 60).padStart(2, "0") + "s";
+    const lp = m.parts && m.parts[m.parts.length - 1];
+    const doing = m.wait || (lp && lp.k === "text" ? "Writing…" : lp && lp.k === "think" ? "Thinking…" : "Working…");
+    return doing + " · " + t;
   }
   function liveNode(m, a) {
     const secs = m.ms ? (m.ms < 60000 ? Math.round(m.ms / 1000) + "s" : Math.floor(m.ms / 60000) + "m " + Math.round((m.ms % 60000) / 1000) + "s") : "";
@@ -1773,9 +1843,10 @@
     }
     const lastP = m.parts[m.parts.length - 1];
     if (lastP && lastP.k === "ask" && lastP.state === "waiting" && (lastP.name === "AskUserQuestion" || lastP.name === "ExitPlanMode")) m.wait = "Waiting for your answer";
-    if (m.running && (!m.parts.length || lastP.k === "tool" && lastP.ok != null || lastP.k === "ask" && lastP.state !== "waiting"))
-      txt.append(h("div", "", h("span", "typing", h("i"), h("i"), h("i")),
-        m.wait || m.secs > 3 ? h("span", "status", (m.wait || "Working…") + (m.secs > 3 ? " · " + m.secs + "s" : "")) : null));
+    // while the agent works the bottom of the reply always says so, with
+    // what it is doing and for how long, whatever came last
+    if (m.running && !(lastP && lastP.k === "ask" && lastP.state === "waiting"))
+      txt.append(h("div", "live-row", h("span", "typing", h("i"), h("i"), h("i")), h("span", "status", liveStatus(m))));
     if (m.error) txt.append(h("div", "errbox", m.error));
     if (m.denied && m.denied.length && !m.running) {
       const c = D.chats.find((x) => x.messages.includes(m));
@@ -3660,7 +3731,7 @@
     }
     let out = "";
     for (let i = lines.length - 1; i >= 0 && out.length < 16000; i--) out = lines[i].slice(0, 4000) + "\n\n" + out;
-    return "[This conversation was started in " + AGENT_NAME[(c.imported || {}).agent] + " and brought into Foxpit. What was said so far:]\n\n" + out.trim() + "\n\n[Continue from here.]";
+    return "[This conversation was started in " + (c.ctxFrom || AGENT_NAME[(c.imported || {}).agent] || "another agent") + " and brought into Foxpit. What was said so far:]\n\n" + out.trim() + "\n\n[Continue from here.]";
   }
   function renderImport() {
     const v = $("#impView");
@@ -3967,9 +4038,19 @@
   function menuRows() {
     const c = chat(), q = state.menuQuery.trim().toLowerCase(), rows = [];
     for (const a of D.accounts) {
-      const models = a.models.filter((m) => !q || (m.name + " " + a.name).toLowerCase().includes(q));
+      let models = a.models.filter((m) => !q || (m.name + " " + a.name).toLowerCase().includes(q));
       if (!models.length) continue;
-      rows.push({ group: a, models });
+      let more = 0;
+      // an agent can offer a hundred models or more: its default, the one in
+      // use and a few more show until the search narrows them
+      if (a.agent && !q && models.length > 7) {
+        const keep = new Set([c.account === a.id ? c.model : "", a.current].filter(Boolean));
+        const pick = models.filter((m) => keep.has(m.id));
+        for (const m of models) { if (pick.length >= 6) break; if (!pick.includes(m)) pick.push(m); }
+        more = models.length - pick.length;
+        models = pick;
+      }
+      rows.push({ group: a, models, more });
     }
     return rows;
   }
@@ -3982,6 +4063,8 @@
     state.menu = kind;
     state.menuQuery = "";
     state.menuIndex = -1;
+    state.mpGroup = undefined;
+    state.mpAll = false;
     menuAnchor = anchor;
     for (const c of document.querySelectorAll(".chip.open, .tb-crumb.open")) c.classList.remove("open");
     anchor.classList.add("open");
@@ -4083,10 +4166,12 @@
   function renderMenu() {
     const m = $("#menu"), c = chat();
     m.onkeydown = null;
+    m.classList.remove("mp2");
     if (state.menu === "effort") return renderEffortMenu();
     if (state.menu === "project") return renderProjectMenu();
     if (state.menu === "alerts") return renderAlertsMenu();
     if (state.menu === "mode") return renderModeMenu();
+    return renderModelMenu();
     const input = h("input");
     input.placeholder = "Switch model or account…";
     input.value = state.menuQuery;
@@ -4103,7 +4188,7 @@
       const q = state.menuQuery.trim(), cm = q ? customModel(q) : null;
       const exact = cm && rows.some((r) => r.models.some((md) => md.id === cm.id));
       if (!rows.length && !cm) list.append(h("div", "empty", "No model matches"));
-      for (const { group: a, models } of rows) {
+      for (const { group: a, models, more } of rows) {
         // the tighter of the two windows is the one that matters
         const used = a.fiveHour == null && a.week == null ? a.who
           : (a.week ?? -1) > (a.fiveHour ?? -1) ? "week " + a.week + "%" : "5h " + a.fiveHour + "%";
@@ -4122,6 +4207,7 @@
           list.append(b);
           i++;
         }
+        if (more) list.append(h("div", "menu-tip", "Type to search " + more + " more " + a.name + " models."));
       }
       if (cm && !exact) {
         const b = h("button", "opt custom" + (i === state.menuIndex ? " hl" : ""), icon("plus"), h("span", "n", "Use “" + cm.name + "” as a model"),
@@ -4141,6 +4227,126 @@
     m._rerender = renderMenuBody;
     m._mark = mark;
   }
+
+  // ---------- the model picker (after T3 Code's): providers down the left,
+  // their models in the middle, the reasoning level on the right ----------
+  var EFFORT_LABEL = { minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra High", max: "Max", ultra: "Ultra", none: "None", default: "Default" };
+  function effortLabel(lv) { return EFFORT_LABEL[lv] || lv || ""; }
+  // an agent that names no reasoning levels picks its own
+  function noEffort(c) { return !!agentOf(c.account) && !((modelOf(c.account, c.model) || {}).efforts || []).length; }
+  function recentModels() {
+    const seen = new Set(), out = [];
+    for (const x of [...D.chats].sort((p, q) => (q.updated || 0) - (p.updated || 0))) {
+      const a = D.accounts.find((g) => g.id === x.account), md = a && a.models.find((y) => y.id === x.model);
+      if (!md || seen.has(a.id + "|" + md.id)) continue;
+      seen.add(a.id + "|" + md.id);
+      out.push({ a, md });
+      if (out.length >= 8) break;
+    }
+    return out;
+  }
+  function renderModelMenu() {
+    const m = $("#menu"), c = chat();
+    m.classList.add("mp2");
+    if (state.mpGroup === undefined) state.mpGroup = D.accounts.some((a) => a.id === c.account) ? c.account : "recent";
+    const q = state.menuQuery.trim().toLowerCase();
+    // the rows: a search looks through every provider
+    let rows = [];
+    if (q) { for (const a of D.accounts) for (const md of a.models) if ((md.name + " " + md.id + " " + a.name).toLowerCase().includes(q)) rows.push({ a, md }); }
+    else if (state.mpGroup === "recent") rows = recentModels();
+    else { const a = D.accounts.find((g) => g.id === state.mpGroup); if (a) rows = a.models.map((md) => ({ a, md })); }
+    let more = 0;
+    if (!state.mpAll && rows.length > 9) {
+      const cur = rows.find((r) => r.a.id === c.account && r.md.id === c.model);
+      const shown = rows.slice(0, 9);
+      if (cur && !shown.includes(cur)) shown[8] = cur;
+      more = rows.length - shown.length;
+      rows = shown;
+    }
+    const cm = q ? customModel(state.menuQuery.trim()) : null;
+    const custom = cm && !rows.some((r) => r.md.id === cm.id) ? cm : null;
+    if (state.menuIndex < 0 || state.menuIndex >= rows.length + (custom ? 1 : 0)) state.menuIndex = Math.max(0, rows.findIndex((r) => r.a.id === c.account && r.md.id === c.model));
+
+    // left: providers
+    const rail = h("div", "pk-rail");
+    const railBtn = (id, node, title) => {
+      const b = h("button", "pk-g" + (!q && state.mpGroup === id ? " on" : ""), node);
+      b.type = "button"; b.title = title;
+      b.onclick = (e) => { e.stopPropagation(); state.mpGroup = id; state.mpAll = false; state.menuQuery = ""; state.menuIndex = -1; renderModelMenu(); m.querySelector(".pk-search input")?.focus(); };
+      rail.append(b);
+    };
+    railBtn("recent", icon("star"), "Recent");
+    for (const a of D.accounts) railBtn(a.id, pv(a.provider), a.name);
+
+    // middle: search and models
+    const input = h("input");
+    input.placeholder = "Search models…";
+    input.value = state.menuQuery;
+    input.oninput = () => { state.menuQuery = input.value; state.menuIndex = -1; renderModelMenu(); const i = m.querySelector(".pk-search input"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+    const list = h("div", "pk-list");
+    const g = !q && state.mpGroup !== "recent" ? D.accounts.find((x) => x.id === state.mpGroup) : null;
+    if (g) list.append(h("div", "pk-gh", h("span", "", g.name), h("span", "", groupUse(g))));
+    rows.forEach((r, i) => {
+      const cur = r.a.id === c.account && r.md.id === c.model;
+      const b = h("button", "pk-o" + (i === state.menuIndex ? " hl" : "") + (cur ? " cur" : ""), pv(r.a.provider, "sm"), h("span", "n", r.md.name),
+        q || state.mpGroup === "recent" ? h("span", "gn", r.a.name) : null, cur ? icon("check", "ck") : null, i < 9 ? h("kbd", "", "Ctrl+" + (i + 1)) : null);
+      b.type = "button";
+      b.onclick = () => choose(r.a.id, r.md.id);
+      b.onmousemove = () => { if (state.menuIndex !== i) { state.menuIndex = i; mark(); } };
+      b.dataset.idx = i;
+      list.append(b);
+    });
+    if (custom) {
+      const i = rows.length, b = h("button", "pk-o" + (i === state.menuIndex ? " hl" : ""), icon("plus"), h("span", "n", "Use “" + custom.name + "” as a model"), h("span", "gn", PNAME[custom.pid] || custom.pid));
+      b.type = "button"; b.dataset.idx = i;
+      b.onclick = () => useCustom(state.menuQuery.trim());
+      list.append(b);
+    }
+    if (!rows.length && !custom) list.append(h("div", "pk-empty", q ? "No model matches" : "Nothing here yet"));
+    if (more) { const sm = h("button", "pk-more", "Show " + more + " more"); sm.type = "button"; sm.onclick = (e) => { e.stopPropagation(); state.mpAll = true; renderModelMenu(); }; list.append(sm); }
+    const mid = h("div", "pk-mid", h("label", "pk-search", icon("search"), input), list);
+
+    // right: reasoning for the chat's model
+    const right = h("div", "pk-right", h("div", "pk-rh", h("span", "", "Reasoning"), h("span", "", modelName(c.account, c.model))));
+    if (noEffort(c)) right.append(h("div", "pk-note", engineName(c.account) + " picks its own reasoning for this model."));
+    else for (const lv of effortsFor(c)) {
+      const b = h("button", "pk-e" + (lv === c.effort ? " cur" : ""), h("span", "", effortLabel(lv)), lv === c.effort ? icon("check", "ck") : null);
+      b.type = "button";
+      b.onclick = (e) => { e.stopPropagation(); c.effort = lv; renderHeader(); save(); renderModelMenu(); };
+      right.append(b);
+    }
+
+    // foot: where it runs, and the permissions
+    const a = acct(c.account), md = modeOf(c);
+    const mode = h("button", "pk-mode mode-" + md.id, icon("shield"), md.name, icon("chev", "chev"));
+    mode.type = "button";
+    mode.onclick = (e) => { e.stopPropagation(); const mc = paneOf(menuAnchor)?.querySelector('[data-id="modeChip"]') || $("#modeChip"); openMenu("mode", mc); };
+    const foot = h("div", "pk-foot", h("span", "pk-where", pv(a.provider, "sm"), a.name, h("span", "dim", groupUse(a))), mode);
+
+    m.replaceChildren(h("div", "pk-body", rail, mid, right), foot);
+    function mark() { for (const o of list.querySelectorAll(".pk-o")) o.classList.toggle("hl", +o.dataset.idx === state.menuIndex); list.querySelector(".pk-o.hl")?.scrollIntoView({ block: "nearest" }); }
+    m._mark = mark;
+    m._rerender = renderModelMenu;
+    const groupsNav = ["recent", ...D.accounts.map((x) => x.id)];
+    input.onkeydown = (e) => {
+      const n = rows.length + (custom ? 1 : 0);
+      if (e.ctrlKey && /^[1-9]$/.test(e.key)) { const r = rows[+e.key - 1]; if (r) { e.preventDefault(); choose(r.a.id, r.md.id); } return; }
+      if (e.key === "ArrowDown") { state.menuIndex = Math.min(n - 1, state.menuIndex + 1); mark(); e.preventDefault(); }
+      else if (e.key === "ArrowUp") { state.menuIndex = Math.max(0, state.menuIndex - 1); mark(); e.preventDefault(); }
+      else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !input.value) {
+        const k = groupsNav.indexOf(state.mpGroup), nx = groupsNav[(k + (e.key === "ArrowRight" ? 1 : -1) + groupsNav.length) % groupsNav.length];
+        state.mpGroup = nx; state.mpAll = false; state.menuIndex = -1; renderModelMenu(); m.querySelector(".pk-search input")?.focus(); e.preventDefault();
+      }
+      else if (e.key === "Enter") { const r = rows[state.menuIndex]; if (r) choose(r.a.id, r.md.id); else if (custom) useCustom(state.menuQuery.trim()); e.preventDefault(); }
+      else if (e.key === "Escape") closeMenu();
+    };
+    requestAnimationFrame(() => { if (state.menu && document.activeElement !== input) input.focus({ preventScroll: true }); });
+  }
+  // how much room a provider has left, as the menu says it
+  function groupUse(a) {
+    if (a.fiveHour == null && a.week == null) return a.agent ? "agent" : a.who || "";
+    return (a.week ?? -1) > (a.fiveHour ?? -1) ? "week " + a.week + "%" : "5h " + a.fiveHour + "%";
+  }
   function menuKeys(e) {
     const flat = menuRows().flatMap((r) => r.models.map((md) => [r.group.id, md.id]));
     const extra = state.menuQuery.trim() && !flat.some((f) => f[1] === (customModel(state.menuQuery) || {}).id) ? 1 : 0;
@@ -4159,6 +4365,8 @@
     if (c.account === accountId && c.model === modelId) return;
     const said = (m) => (m.text || "") + (m.parts || []).map((p) => (p.k === "think" ? "" : p.text || "")).join(" ");
     const words = c.messages.reduce((n, m) => n + said(m).split(/\s+/).filter(Boolean).length, 0);
+    // another agent can't resume this one's session: the next message carries the conversation
+    if (engineName(c.account) !== engineName(accountId) && c.messages.length) { c.ctxFrom = engineName(c.account); c.session = ""; c.importCtx = true; }
     c.account = accountId;
     c.model = modelId;
     fitEffort(c);
@@ -4382,19 +4590,18 @@
     runs.set(c.id, ws);
     setRunning(c, true);
     let ended = false;
-    ws.onopen = () => ws.send(JSON.stringify({ prompt: text, model: c.model, effort: c.effort, session: c.session || "", cwd: runDir(c), mode: modeOf(c).id, images,
+    ws.onopen = () => ws.send(JSON.stringify({ prompt: text, model: c.model, effort: c.effort, session: c.session || "", cwd: runDir(c), mode: modeOf(c).id, images, agent: agentOf(c.account),
       account: D.claudeUser || "", auto: D.autoSwitch !== false, allow: c.allow || [], at: c.cutAt || "", chat: c.id, via: !!S().viaMagpie }));
     const t0 = Date.now();
-    m.wait = "Starting Claude Code…";
+    m.wait = "Starting " + engineName(c.account) + "…";
     // the seconds count on its own: drawing the whole reply again each second
     // replayed the approval card's entrance and made the chat jump
     const tick = setInterval(() => {
       if (!m.running) return clearInterval(tick);
       m.secs = Math.round((Date.now() - t0) / 1000);
       withChat(c, () => {
-        const last = $("#col") && $("#col").lastElementChild, st = last && last.querySelector(".typing + .status");
-        if (st) st.textContent = (m.wait || "Working…") + (m.secs > 3 ? " · " + m.secs + "s" : "");
-        else if (m.secs === 4 && last && last.querySelector(".typing")) patchLast(c);
+        const last = $("#col") && $("#col").lastElementChild, st = last && last.querySelector(".live-row .status");
+        if (st) st.textContent = liveStatus(m);
       });
     }, 1000);
     ws.onmessage = (e) => {
@@ -5799,8 +6006,8 @@
       return (a.models.find((m) => m.id.replace(/^.*\//, "").replace(/[-.]/g, "").toLowerCase().includes(want.replace(/\d+$/, ""))) || a.models[0]).id;
     };
     for (const c of D.chats) {
-      const a = remap(c.account); c.account = a.id; c.model = fixModel(a, c.model);
-      for (const m of c.messages) if (m.account) { const ma = remap(m.account); m.account = ma.id; m.model = fixModel(ma, m.model); }
+      if (!agentOf(c.account)) { const a = remap(c.account); c.account = a.id; c.model = fixModel(a, c.model); }
+      for (const m of c.messages) if (m.account && !agentOf(m.account)) { const ma = remap(m.account); m.account = ma.id; m.model = fixModel(ma, m.model); }
     }
   }
   function setGw(cls, text, title) {
@@ -5811,13 +6018,29 @@
     g.title = title || "";
   }
   let live = false;
+  // ---------- other agents: OpenCode, Gemini CLI… (acp.go) ----------
+  // Foxpit starts each once to ask what it offers; they show in the model
+  // menu as groups of their own, next to the accounts Magpie keeps
+  let agentGroups = [];
+  async function loadAgents(fresh) {
+    try {
+      const r = await fetch("/api/project/agents" + (fresh ? "?fresh=1" : "")).then((x) => (x.ok ? x.json() : Promise.reject(x)));
+      agentGroups = (r.agents || []).map((a) => ({
+        id: "acp:" + a.id, agent: a.id, provider: a.provider, name: a.name, plan: "Agent", who: "agent", fiveHour: null, week: null, current: a.current,
+        models: (a.models || []).map((md) => ({ id: md.id, name: md.name, efforts: (a.efforts || []).map((e) => e.id), note: md.id === a.current ? "default" : "" })),
+      })).filter((g) => g.models.length);
+      D.accounts = D.accounts.filter((a) => !agentOf(a.id)).concat(agentGroups);
+      render();
+      if (state.menu) { renderMenu(); placeMenu(); }
+    } catch {}
+  }
   async function loadLive() {
     if (!live) setGw("wait", "Magpie", "Connecting to the Magpie gateway…");
     try {
       const [q, m] = await Promise.all([fetch("/api/magpie/quotas").then((r) => r.ok ? r.json() : Promise.reject(r)), fetch("/api/magpie/models").then((r) => r.ok ? r.json() : Promise.reject(r))]);
       const accounts = buildLive(q.data || [], m.data || []);
       if (!accounts.length) throw new Error("no models");
-      D.accounts = accounts;
+      D.accounts = accounts.concat(agentGroups);
       D.live = true;
       if (!live) adoptChats(accounts);
       live = true;
@@ -5850,7 +6073,7 @@
   syncMax();
   (async () => {
     if (SAVES) { await loadSaved(); render(); }
-    if (location.protocol !== "file:") { await loadLive(); setInterval(loadLive, 60000); }
+    if (location.protocol !== "file:") { await loadLive(); setInterval(loadLive, 60000); if (SAVES) loadAgents(); }
     startDemo();
   })();
   // checks without touching the screen: ?demo=alt / ?demo=ust opens the menu

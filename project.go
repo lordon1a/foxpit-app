@@ -213,6 +213,7 @@ func projectRoutes(pick func() (string, error)) http.Handler {
 	mediaRoutes(mux)
 	suggestRoutes(mux)
 	browserRoutes(mux)
+	acpRoutes(mux)
 	importRoutes(mux)
 	mentionRoutes(mux)
 	spawnedRoute(mux)

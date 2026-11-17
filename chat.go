@@ -41,6 +41,7 @@ type chatReq struct {
 	Auto    *bool    `json:"auto"`    // move on from an account with no room (default on)
 	Via     bool     `json:"via"`     // Claude through Magpie's gateway (its interactive bridge: about half the plan cost)
 	Mode    string   `json:"mode"`    // edits | full | plan
+	Agent   string   `json:"agent"`   // another agent (acp.go) instead of Claude Code: opencode, gemini…
 	Warm    bool     `json:"warm"`    // only start the chat's process (its hooks, its servers) for the message being typed
 	Allow   []string `json:"allow"`   // "always allow" answers this chat gave
 	askURL  string   // Foxpit's approval tool for this run
@@ -138,6 +139,14 @@ func chatEnv(model string, rt route) []string {
 	if rt.gateway {
 		set["ANTHROPIC_BASE_URL"] = magpieAddr
 		set["ANTHROPIC_AUTH_TOKEN"] = "magpie"
+		// after each reply Claude Code makes one more model call (a turn
+		// summary) before it says the turn is over; through the gateway that
+		// held the reply open 3-5 s. Without it the claude.ai-only tools go
+		// too, and PowerShell, which is asked back.
+		set["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+		if runtime.GOOS == "windows" {
+			set["CLAUDE_CODE_USE_POWERSHELL_TOOL"] = "1"
+		}
 		if model != "" {
 			for _, k := range []string{"ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL",
 				"ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL"} {
@@ -543,6 +552,50 @@ func chatHandler(m *Magpie) http.Handler {
 		if json.Unmarshal(data, &q) != nil || (strings.TrimSpace(q.Prompt) == "" && !q.Warm) {
 			fail("Empty message.")
 			return
+		}
+		if q.Agent != "" && q.Agent != "claude" {
+			a, ok := acpByID(q.Agent)
+			if !ok {
+				fail("Foxpit does not know the agent " + q.Agent + ".")
+				return
+			}
+			// Stop (the socket closing), approval answers and messages typed
+			// meanwhile come back on the socket
+			reader := func(runID string, onSay func(id string)) {
+				for {
+					_, b, err := ws.Read(ctx)
+					if err != nil {
+						cancel()
+						return
+					}
+					var msg struct {
+						T  string `json:"t"`
+						ID string `json:"id"`
+						answer
+					}
+					if json.Unmarshal(b, &msg) != nil {
+						continue
+					}
+					switch msg.T {
+					case "say":
+						onSay(msg.ID)
+					case "answer":
+						askers.Lock()
+						ak := askers.m[runID]
+						askers.Unlock()
+						if ak != nil {
+							ak.answer(msg.ID, msg.answer)
+						}
+					}
+				}
+			}
+			acpChat(ctx, cancel, q, a, termDir(q.Cwd), send, reader)
+			ws.Close(websocket.StatusNormalClosure, "")
+			return
+		}
+		// another agent's session means nothing to Claude Code: a fresh one
+		if strings.HasPrefix(q.Session, "acp:") {
+			q.Session, q.At = "", ""
 		}
 		name, pre, err := claudeCommand()
 		if err != nil {
