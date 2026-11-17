@@ -1,0 +1,15 @@
+Foxpit includes or builds on these projects:
+
+Magpie (https://github.com/yetone/magpie), MIT License, Copyright (c) yetone.
+The installers ship the Magpie command-line app unchanged, in the version named
+in MAGPIE_VERSION, checked against its published SHA256SUMS.
+
+Traycer (https://github.com/traycerai/traycer), MIT License, Copyright (c) Traycer.
+The device sizes in the browser's size menu (browser_tools.go, frontend/app.js)
+come from Traycer's viewport toolbar.
+
+Wails (https://github.com/wailsapp/wails), MIT License.
+coder/websocket (https://github.com/coder/websocket), ISC License.
+go-pty (https://github.com/aymanbagabas/go-pty), MIT License.
+golang.org/x/sys, BSD 3-Clause License.
+xterm.js (https://github.com/xtermjs/xterm.js), MIT License: frontend/vendor/xterm.

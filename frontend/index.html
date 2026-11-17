@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foxpit</title>
+<link rel="stylesheet" href="vendor/xterm/xterm.css">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("fx-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-fox" viewBox="0 0 24 24"><path d="M3 3.5 8.2 9h7.6L21 3.5l-1.4 9.2L12 20.5l-7.6-7.8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9.2 13.2h.01M14.8 13.2h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 16 16"><path d="m4.5 6 3.5 3.5L11.5 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.2 3 3 6-6.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m10.5 10.5 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 16 16"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-send" viewBox="0 0 16 16"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-term" viewBox="0 0 20 20"><rect x="2.5" y="4" width="15" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m6 8.5 2.5 2-2.5 2M10.5 12.5h3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2.5 4.5a1 1 0 0 1 1-1h3l1.5 1.5h4.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-split" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 3v10" stroke="currentColor" stroke-width="1.3"/></symbol>
+    <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="6" r="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 13c.7-2.3 2.4-3.5 4.5-3.5s3.8 1.2 4.5 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-prompt" viewBox="0 0 16 16"><path d="m3 4.5 3 3-3 3M8 11.5h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 16 16"><path d="M8 2.5a3.5 3.5 0 0 0-3.5 3.5v2.5L3 11h10l-1.5-2.5V6A3.5 3.5 0 0 0 8 2.5ZM6.5 13a1.5 1.5 0 0 0 3 0" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10 3v10" stroke="currentColor" stroke-width="1.3"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 2 3 4v4c0 3 2.2 5.2 5 6 2.8-.8 5-3 5-6V4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 16 16"><rect x="6" y="2" width="4" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-wave" viewBox="0 0 16 16"><path d="M2.5 7v2M5 5v6M8 3v10M11 5v6M13.5 7v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-speaker" viewBox="0 0 16 16"><path d="M3 6h2.5L9 3v10L5.5 10H3Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 16 16"><path d="M8 2.5 14 5.5 8 8.5 2 5.5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M2 8.2 8 11.2l6-3M2 10.9 8 13.9l6-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 16 16"><path d="M8 1.8c.4 2.9 1.4 3.9 4.3 4.3-2.9.4-3.9 1.4-4.3 4.3-.4-2.9-1.4-3.9-4.3-4.3 2.9-.4 3.9-1.4 4.3-4.3Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M12.6 10.6c.2 1.3.6 1.7 1.9 1.9-1.3.2-1.7.6-1.9 1.9-.2-1.3-.6-1.7-1.9-1.9 1.3-.2 1.7-.6 1.9-1.9Z" fill="currentColor"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 16 16"><path d="M10.6 2.6l2.8 2.8-7.8 7.8H2.8v-2.8l7.8-7.8Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M9.2 4l2.8 2.8" stroke="currentColor" stroke-width="1.4"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.3" y="5.3" width="8.2" height="8.2" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10.7 3.2A1.6 1.6 0 0 0 9.2 2.5H4.3a1.8 1.8 0 0 0-1.8 1.8v4.9c0 .7.4 1.3 1 1.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-retry" viewBox="0 0 16 16"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12.2 1.9v2.7H9.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-branch" viewBox="0 0 16 16"><circle cx="4.5" cy="3.6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="4.5" cy="12.4" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="11.5" cy="5.6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 5.2v5.6M11.5 7.2c0 2.4-2 3-4.4 3.4-1.2.2-2 .7-2.4 1.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="8" r="4.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+    <symbol id="i-import" viewBox="0 0 16 16"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.8 10.5v1.7c0 .7.6 1.3 1.3 1.3h7.8c.7 0 1.3-.6 1.3-1.3v-1.7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M5.5 3.5v9l7-4.5Z" fill="currentColor"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 16 16"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5" fill="currentColor"/></symbol>
+    <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 2.5h5l3 3v8H4Z M9 2.5v3h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.2c.05.7.6 1.3 1.3 1.3h3.2c.7 0 1.25-.6 1.3-1.3l.6-8.2M6.8 7v4.5M9.2 7v4.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 8h12M8 2c1.8 1.7 2.6 3.7 2.6 6S9.8 12.3 8 14M8 2C6.2 3.7 5.4 5.7 5.4 8s.8 4.3 2.6 6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-arrow-l" viewBox="0 0 16 16"><path d="M13 8H3.5M7.5 4 3.5 8l4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-arrow-r" viewBox="0 0 16 16"><path d="M3 8h9.5M8.5 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 16 16"><rect x="4.5" y="1.8" width="7" height="12.4" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.2 11.8h1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 16 16"><path d="M10.6 2.6l2.8 2.8-7.6 7.6-3.4.6.6-3.4z M9.2 4l2.8 2.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-code" viewBox="0 0 16 16"><path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5M9 3l-2 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 16 16"><path d="M8 13.4S2.2 10 2.2 6.1A2.9 2.9 0 0 1 8 4.6a2.9 2.9 0 0 1 5.8 1.5C13.8 10 8 13.4 8 13.4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7m0-7-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 16 16"><path d="M9 1.8 3.5 9h4l-1 5.2L12.5 7h-4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<header class="titlebar" id="titlebar">
+  <button class="tb-rail" id="railBtn" type="button" title="Chats"><svg><use href="#i-panel"/></svg></button>
+  <div class="tb-brand"><img src="icon.svg" alt="" width="18" height="18"><span>foxpit</span></div>
+  <button class="tb-crumb" id="crumb" type="button" title="Projects"><svg class="fold"><use href="#i-folder"/></svg><b id="proj"></b><span class="sep" id="brSep">/</span><span id="wtName"></span><span class="badge" id="branchBadge"></span><svg class="chev"><use href="#i-chev"/></svg></button>
+  <div class="tb-drag"></div>
+  <button class="tb-support" id="supportBtn" type="button" title="Foxpit is free and open source. Buy me a coffee" hidden><svg><use href="#i-heart"/></svg><span>Support</span></button>
+  <button class="tb-acct" id="acctPill" type="button"></button>
+  <div class="wincap" id="wincap">
+    <button type="button" data-cap="min" title="Minimize">&#xE921;</button>
+    <button type="button" data-cap="max" title="Maximize">&#xE922;</button>
+    <button type="button" data-cap="close" class="close" title="Close">&#xE8BB;</button>
+  </div>
+</header>
+<div class="app">
+  <aside class="rail">
+    <div class="rail-top">
+      <div class="search-row"><label class="search"><svg><use href="#i-search"/></svg><input id="chatSearch" type="text" placeholder="Search chats" spellcheck="false" autocomplete="off"><kbd>Ctrl K</kbd></label><button class="imp-btn" type="button" id="importBtn" title="Import chats from Claude Code and Codex"><svg><use href="#i-import"/></svg></button></div>
+    </div>
+    <div class="rail-view" id="railView"><span class="rv-ink"></span><button type="button" data-view="projects">Projects</button><button type="button" data-view="recent">Recent</button></div>
+    <nav class="chats" id="chatList"></nav>
+    <div class="dock-area acct" id="acctCard">
+      <div class="dock-acts">
+        <button class="wide" type="button" id="agentsBtn" title="Running agents"><svg><use href="#i-user"/></svg>Agents<span class="c" id="agentsCount"></span></button>
+        <button class="wide sq" type="button" id="setBtn" title="Settings (Ctrl+,)"><svg><use href="#i-gear"/></svg></button>
+      </div>
+      <button class="wide pri" type="button" id="newChat"><svg><use href="#i-plus"/></svg>New agent<kbd>Ctrl N</kbd></button>
+      <div class="dock" id="dock">
+        <button class="ib" type="button" data-dock="terminal" title="Terminal"><svg><use href="#i-prompt"/></svg></button>
+        <button class="ib" type="button" data-dock="split" title="Split: another chat beside (Ctrl+\)"><svg><use href="#i-split"/></svg></button>
+        <button class="ib" type="button" data-dock="alerts" title="Notifications"><svg><use href="#i-bell"/></svg><span class="n" id="alertCount" hidden></span></button>
+        <button class="ib" type="button" data-dock="changes" title="Changes"><svg><use href="#i-file"/></svg></button>
+        <button class="ib" type="button" data-dock="projects" title="Projects"><svg><use href="#i-folder"/></svg></button>
+        <button class="ib" type="button" data-dock="magpie" title="Magpie: accounts, models, usage"><svg><use href="#i-layers"/></svg></button>
+        <button class="ib" type="button" data-dock="panel" title="Side panel (Ctrl+B)"><svg><use href="#i-panel"/></svg></button>
+      </div>
+    </div>
+  </aside>
+
+  <section class="main">
+    <div class="panes" id="panes" data-file-drop-target>
+      <div class="pane active">
+        <header class="chathead">
+          <h1 data-id="chatTitle"></h1>
+          <span class="badge" data-id="chatState"></span>
+          <div class="head-r">
+            <button class="icon-btn pane-btn" type="button" data-id="paneBrowser" title="Browser: open a page beside the chat"><svg><use href="#i-globe"/></svg></button>
+            <button class="icon-btn pane-btn" type="button" data-id="paneSplit" title="Split: open another chat beside this one (Ctrl+\)"><svg><use href="#i-split"/></svg></button>
+            <button class="icon-btn pane-btn" type="button" data-id="paneClose" title="Close this pane"><svg><use href="#i-x"/></svg></button>
+            <button class="chip" type="button" data-id="acctChip"></button>
+            <button class="chip chip-model" type="button" data-id="modelChip"></button>
+          </div>
+        </header>
+        <div class="msgs" data-id="msgs"><div class="col" data-id="col"></div></div>
+        <form class="composer" data-id="composer" autocomplete="off">
+          <textarea data-id="input" rows="1" placeholder="Reply, or type / for commands…"></textarea>
+          <div class="tb">
+            <button class="chip" type="button" data-id="attach" title="Attach files"><svg><use href="#i-plus"/></svg></button>
+            <button class="chip" type="button" data-id="modelChip2"></button>
+            <button class="chip" type="button" data-id="effortChip"></button>
+            <button class="chip" type="button" data-id="modeChip"></button>
+            <span class="chip chip-quiet" data-id="wtChip"></span>
+            <button class="chip ctx-chip" type="button" data-id="ctxChip" title="Context"></button>
+            <button class="chip icon-chip" type="button" data-id="voiceBtn" title="Voice chat: talk, pause, hear the reply"><svg><use href="#i-wave"/></svg></button>
+            <button class="chip icon-chip" type="button" data-id="micBtn" title="Dictate (Windows voice typing, Win+H)"><svg><use href="#i-mic"/></svg></button>
+            <button class="send" type="submit" title="Send"><svg><use href="#i-send"/></svg></button>
+          </div>
+        </form>
+        <div class="drop-hint"><span></span></div>
+      </div>
+    </div>
+    <div class="menu" id="menu" hidden></div>
+  </section>
+
+  <div class="side-handle" id="sideHandle" title="Drag to resize · click to hide the panel (Ctrl+B)"><button type="button" id="sideToggle" aria-label="Hide panel"><svg><use href="#i-chev"/></svg></button></div>
+  <aside class="side">
+    <div class="tabs" id="tabs">
+      <span class="tab-ink" id="tabInk"></span>
+      <button class="on" data-tab="session" type="button">Session</button>
+      <button data-tab="changes" type="button">Changes</button>
+      <button data-tab="terminal" type="button">Terminal</button>
+      <button data-tab="agents" type="button">Agents</button>
+      <button data-tab="github" type="button">GitHub</button>
+      <button class="tab-x" id="sideClose" type="button" title="Hide panel (Ctrl+B)"><svg><use href="#i-x"/></svg></button>
+    </div>
+    <div class="side-body" id="sideBody"></div>
+  </aside>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script type="module" src="term.js"></script>
+</body>
+</html>

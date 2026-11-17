@@ -1,0 +1,178 @@
+# Foxpit app (Go + Wails) for macOS. The source is the public repo
+# lordon1a/foxpit-app at a tag or branch; this workflow lives in
+# lordon1a/foxpit-releases only because the signing identity's secrets are
+# kept there. Magpie (MIT, yetone/magpie) goes inside the .app, so nothing
+# else needs installing. One zip per Mac kind comes out as this run's
+# artifact: Apple silicon (arm64) and Intel (amd64); they are added to the
+# release in lordon1a/foxpit-app by hand (gh run download + gh release upload).
+# Run: gh workflow run app-mac.yml -R lordon1a/foxpit-releases -f ref=app-v0.2.4 -f version=0.2.4
+name: Foxpit app - Mac build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or branch of lordon1a/foxpit-app to build (e.g. app-v0.2.4)'
+        required: true
+      version:
+        description: 'App version (e.g. 0.2.4)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  mac:
+    runs-on: macos-15
+    steps:
+      - name: Get the source
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          git clone --depth 1 --branch "$REF" https://github.com/lordon1a/foxpit-app.git src
+          cd src && git log -1 --oneline && ls
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+      - name: Get Magpie (checksum checked)
+        working-directory: src
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mpv=$(tr -d '[:space:]' < MAGPIE_VERSION)
+          mkdir mp && cd mp
+          gh release download "$mpv" -R yetone/magpie -p 'magpie-cli-darwin-arm64' -p 'magpie-cli-darwin-amd64' -p 'SHA256SUMS'
+          grep -E 'magpie-cli-darwin-(arm64|amd64)$' SHA256SUMS | shasum -a 256 -c -
+          chmod +x magpie-cli-darwin-*
+          ./magpie-cli-darwin-arm64 --version || true
+          ./magpie-cli-darwin-arm64 --help 2>&1 | head -40 || true
+      - name: Build
+        working-directory: src
+        env:
+          CGO_ENABLED: '1'
+          MACOSX_DEPLOYMENT_TARGET: '12.0'
+          V: ${{ inputs.version }}
+        run: |
+          go vet .
+          for a in arm64 amd64; do
+            GOARCH=$a go build -trimpath -ldflags="-s -w -X main.version=$V" -o "foxpit-$a" .
+          done
+      - name: Signing identity (self-signed, the same every build, so macOS keeps Foxpit's permissions across updates)
+        env:
+          P12: ${{ secrets.MAC_SIGN_P12 }}
+          PASS: ${{ secrets.MAC_SIGN_PASS }}
+        run: |
+          kc=$RUNNER_TEMP/sign.keychain-db; kp=$(openssl rand -hex 12)
+          security create-keychain -p "$kp" $kc
+          security set-keychain-settings -lut 21600 $kc
+          security unlock-keychain -p "$kp" $kc
+          printf %s "$P12" | base64 --decode > $RUNNER_TEMP/s.p12
+          security import $RUNNER_TEMP/s.p12 -k $kc -P "$PASS" -T /usr/bin/codesign >/dev/null
+          rm -f $RUNNER_TEMP/s.p12
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kp" $kc >/dev/null
+          security list-keychains -d user -s $kc $(security list-keychains -d user | tr -d '"')
+          id=$(security find-certificate -c "Foxpit Self-Signed" -Z $kc | awk '/SHA-1/{print $NF}')
+          test -n "$id"
+          echo "SIGN_ID=$id" >> $GITHUB_ENV
+          echo "signing with $id"
+      - name: Make Foxpit.app (one per Mac kind)
+        working-directory: src
+        env:
+          V: ${{ inputs.version }}
+        run: |
+          set=icon.iconset; mkdir $set
+          for s in 16 32 128 256; do
+            sips -z $s $s build/icon-256.png --out $set/icon_${s}x${s}.png >/dev/null
+            d=$((s*2)); sips -z $d $d build/icon-256.png --out $set/icon_${s}x${s}@2x.png >/dev/null
+          done
+          iconutil -c icns $set -o icon.icns
+          for a in arm64 amd64; do
+            kind=$([ $a = arm64 ] && echo apple-silicon || echo intel)
+            app=out-$a/Foxpit.app
+            mkdir -p $app/Contents/MacOS $app/Contents/Resources
+            cp foxpit-$a $app/Contents/MacOS/foxpit
+            cp mp/magpie-cli-darwin-$a $app/Contents/MacOS/magpie
+            cp icon.icns $app/Contents/Resources/icon.icns
+            printf '%s\n' \
+              '<?xml version="1.0" encoding="UTF-8"?>' \
+              '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+              '<plist version="1.0"><dict>' \
+              '<key>CFBundleName</key><string>Foxpit</string>' \
+              '<key>CFBundleDisplayName</key><string>Foxpit</string>' \
+              '<key>CFBundleExecutable</key><string>foxpit</string>' \
+              '<key>CFBundleIdentifier</key><string>dev.foxpit.app</string>' \
+              '<key>CFBundleIconFile</key><string>icon</string>' \
+              '<key>CFBundlePackageType</key><string>APPL</string>' \
+              "<key>CFBundleShortVersionString</key><string>$V</string>" \
+              "<key>CFBundleVersion</key><string>$V</string>" \
+              '<key>LSMinimumSystemVersion</key><string>12.0</string>' \
+              '<key>NSHighResolutionCapable</key><true/>' \
+              '<key>NSAppleEventsUsageDescription</key><string>Foxpit opens Terminal for account sign-in.</string>' \
+              '<key>NSDesktopFolderUsageDescription</key><string>The coding agents you run in Foxpit read and change project files in this folder.</string>' \
+              '<key>NSDocumentsFolderUsageDescription</key><string>The coding agents you run in Foxpit read and change project files in this folder.</string>' \
+              '<key>NSDownloadsFolderUsageDescription</key><string>The coding agents you run in Foxpit read and change project files in this folder.</string>' \
+              '<key>NSRemovableVolumesUsageDescription</key><string>The coding agents you run in Foxpit read and change project files on this drive.</string>' \
+              '<key>NSNetworkVolumesUsageDescription</key><string>The coding agents you run in Foxpit read and change project files on this drive.</string>' \
+              '<key>NSPhotoLibraryUsageDescription</key><string>A coding agent in Foxpit looked inside your Pictures folder. Foxpit itself never reads your photos.</string>' \
+              '</dict></plist>' > $app/Contents/Info.plist
+            plutil -lint $app/Contents/Info.plist
+            codesign --force --timestamp=none --sign "$SIGN_ID" $app/Contents/MacOS/magpie
+            codesign --force --timestamp=none --sign "$SIGN_ID" $app
+            codesign --verify --deep --verbose $app
+            codesign -d -r- $app 2>&1 | grep designated
+            (cd out-$a && ditto -c -k --keepParent Foxpit.app "../../Foxpit-$V-mac-$kind.zip")
+          done
+          ls -la ..
+      - name: Starts on macOS with its own Magpie (page, API, gateway; no window)
+        working-directory: src
+        run: |
+          export HOME=$RUNNER_TEMP/home; mkdir -p $HOME
+          out-arm64/Foxpit.app/Contents/MacOS/foxpit --dev-http 127.0.0.1:3555 & pid=$!
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:3555/ >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:3555/ | head -c 80; echo
+          for i in $(seq 1 30); do s=$(curl -s http://127.0.0.1:3555/api/magpie/setup); echo "$s" | grep -q '"gateway":true' && break; sleep 2; done
+          echo "setup: $s"
+          curl -s http://127.0.0.1:3555/api/magpie/status | head -c 300; echo
+          kill $pid || true
+          sleep 1
+          grep -v 'key' $HOME/Library/Caches/Foxpit/foxpit.log | tail -25 || true
+          echo "$s" | grep -q '"magpie":true'
+          echo "$s" | grep -q '"gateway":true'
+      - name: Updates itself (an older Foxpit.app takes this build from a local feed)
+        working-directory: src
+        env:
+          V: ${{ inputs.version }}
+        run: |
+          export HOME=$RUNNER_TEMP/home2; mkdir -p $HOME
+          apps=$RUNNER_TEMP/Apps; mkdir -p $apps
+          GOARCH=arm64 CGO_ENABLED=1 MACOSX_DEPLOYMENT_TARGET=12.0 go build -trimpath -ldflags="-s -w -X main.version=0.0.1" -o foxpit-old .
+          cp -R out-arm64/Foxpit.app $apps/Foxpit.app
+          cp foxpit-old $apps/Foxpit.app/Contents/MacOS/foxpit
+          sed -i '' "s#<string>$V</string>#<string>0.0.1</string>#g" $apps/Foxpit.app/Contents/Info.plist
+          codesign --force --timestamp=none --sign "$SIGN_ID" $apps/Foxpit.app
+          feed=$RUNNER_TEMP/feed; mkdir -p $feed
+          z=Foxpit-$V-mac-apple-silicon.zip
+          cp ../$z $feed/
+          sum=$(shasum -a 256 $feed/$z | cut -d' ' -f1); size=$(stat -f%z $feed/$z)
+          printf '[{"tag_name":"app-v%s","draft":false,"prerelease":false,"body":"test","assets":[{"name":"%s","browser_download_url":"http://127.0.0.1:3591/%s","digest":"sha256:%s","size":%s}]}]' "$V" "$z" "$z" "$sum" "$size" > $feed/releases.json
+          (cd $feed && python3 -m http.server 3591 --bind 127.0.0.1 >/dev/null 2>&1 &)
+          sleep 1
+          FOXPIT_UPDATE_FEED=http://127.0.0.1:3591/releases.json $apps/Foxpit.app/Contents/MacOS/foxpit --dev-http 127.0.0.1:3556 & pid=$!
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:3556/api/update >/dev/null && break; sleep 1; done
+          curl -s http://127.0.0.1:3556/api/update; echo
+          curl -s -X POST -H 'Origin: http://127.0.0.1:3556' http://127.0.0.1:3556/api/update/check >/dev/null
+          for i in $(seq 1 60); do s=$(curl -s http://127.0.0.1:3556/api/update); echo "$s" | grep -qE '"state":"(ready|error|idle)"' && break; sleep 2; done
+          echo "after: $s"
+          kill $pid || true
+          echo "$s" | grep -q '"state":"ready"'
+          grep -A1 CFBundleShortVersionString $apps/Foxpit.app/Contents/Info.plist
+          grep -q "<string>$V</string>" $apps/Foxpit.app/Contents/Info.plist
+          codesign --verify --deep --strict $apps/Foxpit.app
+          ls -a $apps $apps/.foxpit-update
+          test -d $apps/.foxpit-update/old
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foxpit-${{ inputs.version }}-mac
+          path: Foxpit-${{ inputs.version }}-mac-*.zip
+          retention-days: 7

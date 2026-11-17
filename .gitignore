@@ -1,0 +1,7 @@
+dist/
+installer/payload/*.exe
+installer/rsrc*.syso
+rsrc*.syso
+*.exe
+*.old
+PLAN.md

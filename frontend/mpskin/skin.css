@@ -1,0 +1,56 @@
+/* Magpie's own pages, worn as part of Foxpit: Foxpit's colours and type,
+   Magpie's header gone (Foxpit's tabs stand in for its navigation). */
+:root:root:root {
+  color-scheme: dark;
+  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --bg: #0c0d0f;
+  --card: #16171a;
+  --card-2: #131416;
+  --pill: #1c1d21;
+  --pill-hover: #22242a;
+  --seg-track: rgba(255, 255, 255, .03);
+  --seg-thumb: #26282d;
+  --seg-edge: inset 0 0 0 1px #2f3238;
+  --line: #25272c;
+  --line-2: #202226;
+  --fg: #e8e8ea;
+  --fg-2: #d6d7db;
+  --muted: #8c8f97;
+  --faint: #5f626a;
+  --ctl-fg: #a3a6ad;
+  --accent: #ff7a1a;
+  --accent-soft: rgba(255, 122, 26, .13);
+  --accent-fg: #170a00;
+  --sel: rgba(255, 122, 26, .2);
+  --green: #3ecf8e;
+  --green-soft: rgba(62, 207, 142, .13);
+  --red: #f2555a;
+  --red-soft: rgba(242, 85, 90, .13);
+  --amber: #f5b13d;
+  --amber-soft: rgba(245, 177, 61, .13);
+  --pop-bg: rgba(22, 23, 26, .98);
+  --shadow: 0 18px 48px rgba(0, 0, 0, .6), 0 0 0 1px #2f3238;
+  --logo-invert: 1;
+  --c1: #ff7a1a; --c2: #4c8dff; --c3: #3ecf8e; --c4: #f5b13d; --c5: #ff5d8f; --c6: #b48cff; --c7: #8a8f98;
+}
+html, body { background: var(--bg) !important; font-family: var(--font); -webkit-font-smoothing: antialiased; }
+/* Foxpit's tabs and title bar do this */
+header.top { display: none !important; }
+body { padding-top: 0 !important; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2a2c31; border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+::selection { background: rgba(255, 122, 26, .3); }
+/* the sidebar layout's menu too: Foxpit's tabs replace it */
+#side, .sidebar { display: none !important; }
+body.side-nav { padding-left: 0 !important; }
+:root:root:root[data-fx=light] {
+  color-scheme: light;
+  --bg: #f7f7f5; --card: #ffffff; --card-2: #f4f4f1; --pill: #f1f1ee; --pill-hover: #e8e8e4;
+  --seg-track: rgba(0, 0, 0, .035); --seg-thumb: #ffffff; --seg-edge: inset 0 0 0 1px #d2d2cd;
+  --line: #e3e3df; --line-2: #ebebe7; --fg: #1b1c1f; --fg-2: #34363b; --muted: #696c74; --faint: #9b9da4; --ctl-fg: #55585f;
+  --accent: #e8650a; --accent-soft: rgba(232, 101, 10, .1); --accent-fg: #ffffff; --sel: rgba(232, 101, 10, .16);
+  --green: #17935a; --green-soft: rgba(23, 147, 90, .1); --red: #d4363c; --red-soft: rgba(212, 54, 60, .1);
+  --amber: #b4740b; --amber-soft: rgba(180, 116, 11, .1);
+  --pop-bg: rgba(255, 255, 255, .98); --shadow: 0 16px 40px rgba(0, 0, 0, .14), 0 0 0 1px #e3e3df; --logo-invert: 0;
+}
