@@ -47,10 +47,6 @@ go build -o foxpit .
 - `browser.go`: the browser, a Chromium already on the computer, run with no window over the DevTools protocol and streamed to the page.
 - `frontend/`: the interface, plain JavaScript and CSS.
 
-## Support
-
-Foxpit is free. If it saves you time, you can [buy me a coffee](SUPPORT_LINK).
-
 ## License
 
 MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for the parts that come from other projects.
